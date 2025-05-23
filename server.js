@@ -135,9 +135,6 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
         folder: targetFolder, // Use MPVID-based folder structure
         resource_type: 'image',
         
-        // Built-in metadata fields
-        ...builtInFields,
-        
         // Contextual metadata
         context: contextString,
         
@@ -149,8 +146,14 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
         
         // Generate unique filename if conflict
         unique_filename: false,
-        use_filename: true
+        use_filename: true,
+        
+        // Built-in metadata fields - these need to be at the root level
+        ...(metadata['Title (caption)'] && { caption: metadata['Title (caption)'] }),
+        ...(metadata['Description (alt)'] && { alt: metadata['Description (alt)'] })
       };
+      
+      console.log('🚀 Upload options:', JSON.stringify(uploadOptions, null, 2));
       
       const uploadStream = cloudinary.uploader.upload_stream(
         uploadOptions,
@@ -164,6 +167,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
             console.log(`📝 Caption: ${result.caption || 'None'}`);
             console.log(`📝 Alt text: ${result.alt || 'None'}`);
             console.log(`🏷️  Tags: ${result.tags ? result.tags.join(', ') : 'None'}`);
+            console.log('📋 Full result:', JSON.stringify(result, null, 2));
             resolve(result);
           }
         }
