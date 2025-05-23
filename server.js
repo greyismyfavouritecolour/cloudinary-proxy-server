@@ -1,3 +1,76 @@
+// Secure Cloudinary Proxy Server for Figma Plugin
+// This server handles signed uploads to keep your API credentials safe
+
+const express = require('express');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors({
+  origin: '*', // Allow all origins for Figma plugin
+  methods: ['POST', 'GET'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// Configure Cloudinary with environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Verify Cloudinary configuration on startup
+console.log('🔧 Verifying Cloudinary configuration...');
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('❌ Missing Cloudinary credentials in .env file');
+  process.exit(1);
+}
+console.log(`✅ Cloudinary configured for: ${process.env.CLOUDINARY_CLOUD_NAME}`);
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  
+  if (!token) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Access token required' 
+    });
+  }
+  
+  if (token !== process.env.AUTH_TOKEN) {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Invalid access token' 
+    });
+  }
+  
+  next();
+};
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Cloudinary proxy server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Main upload endpoint
 app.post('/upload', authenticateToken, upload.single('image'), async (req, res) => {
   console.log('\n🚀 New upload request received');
@@ -134,4 +207,39 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       });
     }
   }
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('💥 Unhandled error:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    details: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found',
+    available_endpoints: [
+      'GET /health - Health check',
+      'POST /upload - Upload images'
+    ]
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log('\n🎉 Cloudinary Proxy Server Started Successfully!');
+  console.log(`📍 Server running on: http://localhost:${PORT}`);
+  console.log(`🔒 Authentication required: Bearer ${process.env.AUTH_TOKEN}`);
+  console.log(`📁 Upload folder: ${process.env.UPLOAD_FOLDER || 'figma-exports'}`);
+  console.log('\n📋 Available endpoints:');
+  console.log(`   GET  http://localhost:${PORT}/health`);
+  console.log(`   POST http://localhost:${PORT}/upload`);
+  console.log('\n🛑 Press Ctrl+C to stop the server\n');
 });
