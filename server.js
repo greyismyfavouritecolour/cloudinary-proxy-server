@@ -33,6 +33,11 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       builtInFields.alt = metadata['Description (alt)'];
     }
     
+    // Extract MPVID for folder structure
+    const mpvid = metadata.MPVID || 'unknown';
+    const baseFolder = process.env.UPLOAD_FOLDER || 'figma-exports';
+    const targetFolder = `${baseFolder}/${mpvid}`;
+    
     // Handle contextual metadata (everything else)
     Object.entries(metadata).forEach(([key, value]) => {
       if (key !== 'Title (caption)' && key !== 'Description (alt)' && 
@@ -46,6 +51,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       .join('|');
     
     console.log(`🏷️  Built-in fields:`, builtInFields);
+    console.log(`📁 Target folder: ${targetFolder}`);
     console.log(`🏷️  Context: ${contextString}`);
     
     // Upload to Cloudinary using a Promise wrapper
@@ -53,7 +59,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       const uploadOptions = {
         // Upload options
         public_id: filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, ''),
-        folder: process.env.UPLOAD_FOLDER || 'figma-exports',
+        folder: targetFolder, // Use MPVID-based folder structure
         resource_type: 'image',
         
         // Built-in metadata fields
@@ -63,7 +69,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
         context: contextString,
         
         // Optional: Add tags
-        tags: ['figma', 'metadata-export'],
+        tags: ['figma', 'metadata-export', mpvid], // Add MPVID as a tag too
         
         // Overwrite files with same public_id
         overwrite: true,
@@ -81,8 +87,10 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
             reject(error);
           } else {
             console.log(`✅ Upload successful: ${result.secure_url}`);
+            console.log(`📁 Uploaded to folder: ${targetFolder}`);
             console.log(`📝 Caption: ${result.caption || 'None'}`);
             console.log(`📝 Alt text: ${result.alt || 'None'}`);
+            console.log(`🏷️  Tags: ${result.tags ? result.tags.join(', ') : 'None'}`);
             resolve(result);
           }
         }
