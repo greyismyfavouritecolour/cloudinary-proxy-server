@@ -93,28 +93,34 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
     console.log(`📊 Metadata:`, metadata);
     console.log(`📏 File size: ${(req.file.size / 1024).toFixed(2)}KB`);
     
+    // Define target folder (from environment variable or default)
+    const targetFolder = process.env.UPLOAD_FOLDER || 'figma-exports';
+    
+    // Get MPVID from metadata
+    const mpvid = metadata.MPVID || metadata.baseName || 'unknown';
+    
     // Separate built-in fields from context metadata
     const builtInFields = {};
     const contextData = {};
     
     // Handle built-in Cloudinary fields
-      if (metadata['context.custom.title']) {
-        builtInFields.caption = metadata['context.custom.title'];
-      }
+    if (metadata['context.custom.title']) {
+      builtInFields.caption = metadata['context.custom.title'];
+    }
 
-      if (metadata['context.custom.alt']) {
-        builtInFields.alt = metadata['context.custom.alt'];
-      }
+    if (metadata['context.custom.alt']) {
+      builtInFields.alt = metadata['context.custom.alt'];
+    }
 
-      // Handle contextual metadata (everything else)
-      Object.entries(metadata).forEach(([key, value]) => {
-        if (!key.startsWith('context.custom.') && 
-            key !== 'timestamp' && 
-            key !== 'baseName' && 
-            value) {
-          contextData[key] = value;
-        }
-      });
+    // Handle contextual metadata (everything else)
+    Object.entries(metadata).forEach(([key, value]) => {
+      if (!key.startsWith('context.custom.') && 
+          key !== 'timestamp' && 
+          key !== 'baseName' && 
+          value) {
+        contextData[key] = value;
+      }
+    });
     
     const contextString = Object.entries(contextData)
       .map(([key, value]) => `${key}=${value}`)
