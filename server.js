@@ -98,26 +98,23 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
     const contextData = {};
     
     // Handle built-in Cloudinary fields
-    if (metadata['Title (caption)']) {
-      builtInFields.caption = metadata['Title (caption)'];
-    }
-    
-    if (metadata['Description (alt)']) {
-      builtInFields.alt = metadata['Description (alt)'];
-    }
-    
-    // Extract MPVID for folder structure
-    const mpvid = metadata.MPVID || 'unknown';
-    const baseFolder = process.env.UPLOAD_FOLDER || 'figma-exports';
-    const targetFolder = `${baseFolder}/${mpvid}`;
-    
-    // Handle contextual metadata (everything else)
-    Object.entries(metadata).forEach(([key, value]) => {
-      if (key !== 'Title (caption)' && key !== 'Description (alt)' && 
-          key !== 'timestamp' && key !== 'baseName' && value) {
-        contextData[key] = value;
+      if (metadata['context.custom.title']) {
+        builtInFields.caption = metadata['context.custom.title'];
       }
-    });
+
+      if (metadata['context.custom.alt']) {
+        builtInFields.alt = metadata['context.custom.alt'];
+      }
+
+      // Handle contextual metadata (everything else)
+      Object.entries(metadata).forEach(([key, value]) => {
+        if (!key.startsWith('context.custom.') && 
+            key !== 'timestamp' && 
+            key !== 'baseName' && 
+            value) {
+          contextData[key] = value;
+        }
+      });
     
     const contextString = Object.entries(contextData)
       .map(([key, value]) => `${key}=${value}`)
@@ -132,14 +129,14 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       const uploadOptions = {
         // Upload options
         public_id: filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, ''),
-        folder: targetFolder, // Use MPVID-based folder structure
+        folder: targetFolder,
         resource_type: 'image',
         
         // Contextual metadata
         context: contextString,
         
         // Optional: Add tags
-        tags: ['figma', 'metadata-export', mpvid], // Add MPVID as a tag too
+        tags: ['figma', 'metadata-export', mpvid],
         
         // Overwrite files with same public_id
         overwrite: true,
@@ -148,11 +145,10 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
         unique_filename: false,
         use_filename: true,
         
-        // Built-in metadata fields - these need to be at the root level
-        ...(metadata['Title (caption)'] && { caption: metadata['Title (caption)'] }),
-        ...(metadata['Description (alt)'] && { alt: metadata['Description (alt)'] })
+        // Built-in metadata fields
+        ...builtInFields  // Spread the built-in fields
       };
-      
+
       console.log('🚀 Upload options:', JSON.stringify(uploadOptions, null, 2));
       
       const uploadStream = cloudinary.uploader.upload_stream(
