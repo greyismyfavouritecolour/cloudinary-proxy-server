@@ -93,11 +93,10 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
     console.log(`📊 Metadata:`, metadata);
     console.log(`📏 File size: ${(req.file.size / 1024).toFixed(2)}KB`);
     
-    // Define target folder (from environment variable or default)
-    const targetFolder = process.env.UPLOAD_FOLDER || 'figma-exports';
-    
-    // Get MPVID from metadata
+    // Extract MPVID and setup folder structure
     const mpvid = metadata.MPVID || metadata.baseName || 'unknown';
+    const targetFolder = process.env.UPLOAD_FOLDER || 'figma-exports';
+    const fullFolder = `${targetFolder}/${mpvid}`;
     
     // Separate built-in fields from context metadata
     const builtInFields = {};
@@ -127,7 +126,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       .join('|');
     
     console.log(`🏷️  Built-in fields:`, builtInFields);
-    console.log(`📁 Target folder: ${targetFolder}`);
+    console.log(`📁 Target folder: ${fullFolder}`);
     console.log(`🏷️  Context: ${contextString}`);
     
     // Upload to Cloudinary using a Promise wrapper
@@ -135,14 +134,14 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       const uploadOptions = {
         // Upload options
         public_id: filename.replace(/\.(png|jpg|jpeg|gif|webp)$/i, ''),
-        folder: targetFolder,
+        folder: fullFolder,
         resource_type: 'image',
         
         // Contextual metadata
         context: contextString,
         
         // Optional: Add tags
-        tags: ['figma', 'metadata-export', mpvid],
+        tags: ['figma', 'metadata-export', mpvid].filter(Boolean),
         
         // Overwrite files with same public_id
         overwrite: true,
@@ -165,7 +164,7 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
             reject(error);
           } else {
             console.log(`✅ Upload successful: ${result.secure_url}`);
-            console.log(`📁 Uploaded to folder: ${targetFolder}`);
+            console.log(`📁 Uploaded to folder: ${fullFolder}`);
             console.log(`📝 Caption: ${result.caption || 'None'}`);
             console.log(`📝 Alt text: ${result.alt || 'None'}`);
             console.log(`🏷️  Tags: ${result.tags ? result.tags.join(', ') : 'None'}`);
@@ -190,7 +189,9 @@ app.post('/upload', authenticateToken, upload.single('image'), async (req, res) 
       bytes: uploadResult.bytes,
       created_at: uploadResult.created_at,
       caption: uploadResult.caption,
-      alt: uploadResult.alt
+      alt: uploadResult.alt,
+      context: uploadResult.context,
+      tags: uploadResult.tags
     });
     
   } catch (error) {
