@@ -6,7 +6,7 @@ const express = require('express');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const cors = require('cors');
-const fetch = require('node-fetch'); // Add this for Claude API calls
+// No need for node-fetch import - using native fetch in Node.js 22+
 require('dotenv').config();
 
 const app = express();
