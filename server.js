@@ -1,10 +1,12 @@
 // Secure Cloudinary Proxy Server for Figma Plugin
 // This server handles signed uploads to keep your API credentials safe
+// + Claude API proxy for content localization
 
 const express = require('express');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const cors = require('cors');
+const fetch = require('node-fetch'); // Add this for Claude API calls
 require('dotenv').config();
 
 const app = express();
@@ -69,6 +71,65 @@ app.get('/health', (req, res) => {
     message: 'Cloudinary proxy server is running',
     timestamp: new Date().toISOString()
   });
+});
+
+// NEW: Claude API endpoint for content localization
+app.post('/api/claude', async (req, res) => {
+  console.log('\n🧠 Claude API request received');
+  
+  try {
+    const { prompt, fieldType, targetLocale, apiKey } = req.body;
+    
+    // Validate required fields
+    if (!prompt || !fieldType || !targetLocale || !apiKey) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({ 
+        error: 'Missing required fields: prompt, fieldType, targetLocale, apiKey' 
+      });
+    }
+    
+    console.log(`🎯 Localizing ${fieldType} for ${targetLocale}`);
+    console.log(`📝 Prompt: ${prompt.substring(0, 100)}...`);
+    
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 100,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Claude API Error:', response.status, errorText);
+      return res.status(response.status).json({ 
+        error: `Claude API error: ${response.status} ${response.statusText}`,
+        details: errorText
+      });
+    }
+    
+    const data = await response.json();
+    const result = data.content[0].text.trim();
+    
+    console.log(`✅ Claude response: ${result}`);
+    res.json({ text: result });
+    
+  } catch (error) {
+    console.error('❌ Claude proxy error:', error);
+    res.status(500).json({ 
+      error: 'Proxy server error', 
+      details: error.message 
+    });
+  }
 });
 
 // Main upload endpoint
@@ -233,7 +294,8 @@ app.use('*', (req, res) => {
     error: 'Endpoint not found',
     available_endpoints: [
       'GET /health - Health check',
-      'POST /upload - Upload images'
+      'POST /upload - Upload images',
+      'POST /api/claude - Claude API proxy'  // Added this
     ]
   });
 });
@@ -248,5 +310,6 @@ app.listen(PORT, () => {
   console.log('\n📋 Available endpoints:');
   console.log(`   GET  http://localhost:${PORT}/health`);
   console.log(`   POST http://localhost:${PORT}/upload`);
+  console.log(`   POST http://localhost:${PORT}/api/claude`);  // Added this
   console.log('\n🛑 Press Ctrl+C to stop the server\n');
 });
